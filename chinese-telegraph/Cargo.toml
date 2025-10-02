@@ -1,9 +1,9 @@
 [package]
 name = "chinese-telegraph"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.66"
-description = "provides chinese telegraph code—unicode conversion."
+description = "provides unicode to chinese telegraph code conversion."
 keywords = ["chinese", "telegraph", "conversion", "i18n", "unicode"]
 categories = ["text-processing", "encoding", "no-std"]
 homepage = "https://github.com/milkcask/chinese-telegraph-rs"

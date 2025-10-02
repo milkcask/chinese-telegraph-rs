@@ -1,4 +1,4 @@
 # chinese-telegraph
 
-`chinese-telegraph` is a library that provides chinese telegraph code—unicode
+`chinese-telegraph` is a library that provides unicode to chinese telegraph code
 conversion.

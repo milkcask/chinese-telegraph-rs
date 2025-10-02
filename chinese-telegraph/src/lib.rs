@@ -19,10 +19,17 @@ pub fn to_telegraph(character: &str, table: Table) -> Option<usize> {
         Table::CN => cn::CN_TABLE.get(character).copied(),
     }
 }
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "std")]
+pub fn to_telegraph_string(character: &str, table: Table) -> Option<std::string::String> {
+    to_telegraph(character, table).map(|num| std::format!("{:04}", num))
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::to_telegraph;
+    use crate::{to_telegraph, to_telegraph_string};
 
     #[test]
     fn it_can_look_up_a_tw_character() {
@@ -52,5 +59,11 @@ mod tests {
     fn it_returns_none_for_more_than_one_character() {
         let result = to_telegraph("這是", crate::Table::Both);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn it_formats_the_number_with_leading_zeros() {
+        let result = to_telegraph_string("一", crate::Table::Both);
+        assert_eq!(result, Some(std::string::ToString::to_string("0001")));
     }
 }
