@@ -1,0 +1,20 @@
+[package]
+name = "chinese-telegraph"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.66"
+description = "provides chinese telegraph code—unicode conversion."
+keywords = ["chinese", "telegraph", "conversion", "i18n", "unicode"]
+categories = ["text-processing", "encoding", "no-std"]
+homepage = "https://github.com/milkcask/chinese-telegraph-rs"
+repository = "https://github.com/milkcask/chinese-telegraph-rs"
+readme = "../README.md"
+license = "MIT OR Apache-2.0"
+include = ["src/*.rs", "tests/*.rs", "build.rs", "LICENSE"]
+
+[dependencies]
+phf = { version = "0.13", default-features = false, features = ["macros"] }
+
+[features]
+default = ["std"]
+std = []

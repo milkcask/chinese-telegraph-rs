@@ -1,0 +1,12 @@
+{
+  "rust-analyzer.check.command": "clippy",
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true,
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/Cargo.lock": true
+  },
+  "files.exclude": {
+    "**/target": true
+  }
+}
