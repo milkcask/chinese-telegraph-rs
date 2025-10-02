@@ -1,6 +1,6 @@
 [package]
 name = "chinese-telegraph"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.66"
 description = "provides unicode to chinese telegraph code conversion."
@@ -11,6 +11,10 @@ repository = "https://github.com/milkcask/chinese-telegraph-rs"
 readme = "../README.md"
 license = "MIT OR Apache-2.0"
 include = ["src/*.rs", "tests/*.rs", "build.rs", "LICENSE"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 phf = { version = "0.13", default-features = false, features = ["macros"] }
