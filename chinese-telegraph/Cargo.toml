@@ -18,7 +18,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-phf = { version = "0.13", default-features = false, features = ["macros"] }
+phf = { version = "0.14", default-features = false, features = ["macros"] }
 
 [features]
 default = ["std"]
