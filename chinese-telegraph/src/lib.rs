@@ -41,6 +41,18 @@
 //! assert_eq!(to_telegraph_string("一", Table::Both), Some("0001".to_string()));
 //! ```
 //!
+//! The standard conversion traits are also supported via [`TelegraphCode`]:
+//!
+//! ```rust
+//! use chinese_telegraph::TelegraphCode;
+//!
+//! let code: TelegraphCode = '一'.try_into()?;
+//! let num: usize = code.into();
+//! assert_eq!(num, 1);
+//! assert_eq!(code.to_string(), "0001");
+//! # Ok::<(), chinese_telegraph::NoTelegraphCode>(())
+//! ```
+//!
 //! The input must be exactly one character; longer strings return `None`.
 //! To convert a sentence, iterate over its characters:
 //!
@@ -126,6 +138,114 @@ pub fn to_telegraph(character: &str, table: Table) -> Option<usize> {
         Table::CN => cn::CN_TABLE.get(character).copied(),
     }
 }
+/// The error returned when a conversion to [`TelegraphCode`] fails.
+///
+/// Produced by the [`TryFrom`] implementations on [`TelegraphCode`] when the
+/// character is not found in the searched table(s), or when a string input
+/// is not exactly one character.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoTelegraphCode;
+
+impl core::fmt::Display for NoTelegraphCode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("no Chinese telegraph code for the given character")
+    }
+}
+
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+impl std::error::Error for NoTelegraphCode {}
+
+/// A Chinese telegraph code, usable with the standard conversion traits.
+///
+/// This is the trait-based counterpart to [`to_telegraph`]: converting a
+/// [`char`] or `&str` with [`TryInto`] searches both tables
+/// ([`Table::Both`]), and the resulting code converts [`Into`] a plain
+/// [`usize`]. Use [`TelegraphCode::lookup`] to search a specific table.
+///
+/// The [`Display`](core::fmt::Display) implementation formats the code in
+/// its conventional four-digit form with leading zeros.
+///
+/// # Examples
+///
+/// ```rust
+/// use chinese_telegraph::TelegraphCode;
+///
+/// let code: TelegraphCode = '一'.try_into()?;
+///
+/// // `.into()` recovers the plain number
+/// let num: usize = code.into();
+/// assert_eq!(num, 1);
+///
+/// // Display formats the conventional 4-digit code
+/// assert_eq!(code.to_string(), "0001");
+///
+/// // Unknown characters fail to convert
+/// assert!(TelegraphCode::try_from('🦀').is_err());
+/// # Ok::<(), chinese_telegraph::NoTelegraphCode>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TelegraphCode(usize);
+
+impl TelegraphCode {
+    /// Looks up `character` in the selected `table`.
+    ///
+    /// This is the [`TelegraphCode`] equivalent of [`to_telegraph`], for
+    /// when the lookup should search a specific table rather than
+    /// [`Table::Both`] (which the [`TryFrom`] conversions use).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use chinese_telegraph::{Table, TelegraphCode};
+    ///
+    /// let code = TelegraphCode::lookup('這', Table::TW).unwrap();
+    /// assert_eq!(usize::from(code), 6638);
+    ///
+    /// assert_eq!(TelegraphCode::lookup('这', Table::TW), None);
+    /// ```
+    pub fn lookup(character: char, table: Table) -> Option<Self> {
+        let mut buf = [0u8; 4];
+        to_telegraph(character.encode_utf8(&mut buf), table).map(Self)
+    }
+
+    /// Returns the code as a plain number (e.g. `1` for the code written
+    /// `0001`).
+    pub const fn code(self) -> usize {
+        self.0
+    }
+}
+
+impl core::fmt::Display for TelegraphCode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:04}", self.0)
+    }
+}
+
+impl TryFrom<char> for TelegraphCode {
+    type Error = NoTelegraphCode;
+
+    fn try_from(character: char) -> Result<Self, Self::Error> {
+        Self::lookup(character, Table::Both).ok_or(NoTelegraphCode)
+    }
+}
+
+impl TryFrom<&str> for TelegraphCode {
+    type Error = NoTelegraphCode;
+
+    fn try_from(character: &str) -> Result<Self, Self::Error> {
+        to_telegraph(character, Table::Both)
+            .map(Self)
+            .ok_or(NoTelegraphCode)
+    }
+}
+
+impl From<TelegraphCode> for usize {
+    fn from(code: TelegraphCode) -> Self {
+        code.0
+    }
+}
+
 #[cfg(feature = "std")]
 extern crate std;
 
@@ -184,6 +304,51 @@ mod tests {
     fn it_returns_none_for_more_than_one_character() {
         let result = to_telegraph("這是", crate::Table::Both);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn it_converts_a_char_with_try_into() {
+        let code: crate::TelegraphCode = '這'.try_into().unwrap();
+        assert_eq!(code.code(), 6638);
+    }
+
+    #[test]
+    fn it_converts_a_str_with_try_into() {
+        let code: crate::TelegraphCode = "这".try_into().unwrap();
+        assert_eq!(code.code(), 6638);
+    }
+
+    #[test]
+    fn it_converts_a_code_into_usize() {
+        let code = crate::TelegraphCode::lookup('一', crate::Table::Both).unwrap();
+        let num: usize = code.into();
+        assert_eq!(num, 1);
+    }
+
+    #[test]
+    fn it_fails_to_convert_unknown_characters() {
+        assert_eq!(
+            crate::TelegraphCode::try_from('🦀'),
+            Err(crate::NoTelegraphCode)
+        );
+        assert_eq!(
+            crate::TelegraphCode::try_from("這是"),
+            Err(crate::NoTelegraphCode)
+        );
+    }
+
+    #[test]
+    fn it_respects_the_table_in_lookup() {
+        assert_eq!(crate::TelegraphCode::lookup('这', crate::Table::TW), None);
+        let code = crate::TelegraphCode::lookup('这', crate::Table::CN).unwrap();
+        assert_eq!(code.code(), 6638);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn it_displays_the_code_with_leading_zeros() {
+        let code = crate::TelegraphCode::lookup('一', crate::Table::Both).unwrap();
+        assert_eq!(std::string::ToString::to_string(&code), "0001");
     }
 
     #[test]
