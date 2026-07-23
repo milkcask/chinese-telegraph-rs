@@ -1,9 +1,9 @@
 [package]
 name = "chinese-telegraph"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 rust-version = "1.66"
-description = "provides unicode to chinese telegraph code conversion."
+description = "Convert Unicode Chinese characters to Chinese telegraph codes (中文電碼)"
 keywords = ["chinese", "telegraph", "conversion", "i18n", "unicode"]
 categories = ["text-processing", "encoding", "no-std"]
 homepage = "https://github.com/milkcask/chinese-telegraph-rs"
@@ -11,7 +11,7 @@ repository = "https://github.com/milkcask/chinese-telegraph-rs"
 readme = "../README.md"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/chinese-telegraph"
-include = ["src/*.rs", "tests/*.rs", "build.rs", "LICENSE"]
+include = ["src/*.rs", "tests/*.rs", "build.rs", "LICENSE-MIT", "LICENSE-APACHE"]
 
 [package.metadata.docs.rs]
 all-features = true
