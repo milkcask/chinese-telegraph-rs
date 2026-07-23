@@ -24,7 +24,7 @@ cargo add chinese-telegraph
 ## Usage
 
 ```rust
-use chinese_telegraph::{to_telegraph, to_telegraph_string, Table};
+use chinese_telegraph::{to_telegraph, to_telegraph_str, Table};
 
 // Look up a Traditional Chinese character
 assert_eq!(to_telegraph("這", Table::TW), Some(6638));
@@ -38,32 +38,61 @@ assert_eq!(to_telegraph("一", Table::Both), Some(1));
 // Unknown characters return None
 assert_eq!(to_telegraph("🦀", Table::Both), None);
 
-// Format as the conventional 4-digit code (requires the `std` feature)
-assert_eq!(to_telegraph_string("一", Table::Both), Some("0001".to_string()));
+// Format as the conventional 4-digit code — no heap allocation
+assert_eq!(to_telegraph_str("一", Table::Both).unwrap(), "0001");
+```
+
+The standard conversion traits are also supported via `TelegraphCode`:
+
+```rust
+use chinese_telegraph::TelegraphCode;
+
+let code = TelegraphCode::try_from('一').unwrap();
+let num: usize = code.into();
+assert_eq!(num, 1);
+assert_eq!(code.to_code_str(), "0001");
 ```
 
 The input must be exactly one character; passing a longer string returns
 `None`. To convert a sentence, iterate over its characters:
 
 ```rust
-use chinese_telegraph::{to_telegraph_string, Table};
+use chinese_telegraph::{Table, TelegraphCode};
 
 let codes: Vec<_> = "電報"
     .chars()
-    .filter_map(|c| to_telegraph_string(&c.to_string(), Table::TW))
+    .filter_map(|c| TelegraphCode::lookup(c, Table::TW))
+    .map(|code| code.to_code_str())
     .collect();
 assert_eq!(codes, ["7193", "1032"]);
 ```
 
 ## `no_std` support
 
-The crate is `no_std` by default. The `std` feature (enabled by default) adds
-`to_telegraph_string`, which formats codes as 4-digit `String`s. To use the
-crate in a `no_std` environment:
+The crate is `no_std`-compatible and allocation-free at its core: lookups use
+compile-time perfect hash maps, and four-digit formatting with
+`to_telegraph_str` returns a `CodeStr` that stores the digits inline and
+dereferences to `&str` — no `String`, no heap.
+
+All feature flags are **enabled by default**:
+
+- `telegraph-code` — the `TelegraphCode` type with its standard conversion
+  traits, and the `NoTelegraphCode` error
+- `code-str` — the `CodeStr` inline four-digit string type and
+  `to_telegraph_str`
+- `std` — `to_telegraph_string`, which formats codes as 4-digit `String`s,
+  and (with `telegraph-code`) a `std::error::Error` implementation for
+  `NoTelegraphCode`
+
+Everything except `std` is `no_std`-compatible. To use the crate in a
+`no_std` environment, disable default features:
 
 ```toml
 [dependencies]
-chinese-telegraph = { version = "0.2", default-features = false }
+chinese-telegraph = { version = "0.3", default-features = false, features = [
+    "telegraph-code",
+    "code-str",
+] }
 ```
 
 ## Minimum supported Rust version

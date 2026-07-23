@@ -25,7 +25,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use chinese_telegraph::{to_telegraph, to_telegraph_string, Table};
+//! use chinese_telegraph::{to_telegraph, to_telegraph_str, Table};
 //!
 //! // Look up a Traditional Chinese character
 //! assert_eq!(to_telegraph("這", Table::TW), Some(6638));
@@ -36,9 +36,8 @@
 //! // Search both tables (Traditional first, then Simplified)
 //! assert_eq!(to_telegraph("一", Table::Both), Some(1));
 //!
-//! // Format as the conventional 4-digit code (requires the `std` feature)
-//! # #[cfg(feature = "std")]
-//! assert_eq!(to_telegraph_string("一", Table::Both), Some("0001".to_string()));
+//! // Format as the conventional 4-digit code — no heap allocation
+//! assert_eq!(to_telegraph_str("一", Table::Both).unwrap(), "0001");
 //! ```
 //!
 //! The standard conversion traits are also supported via [`TelegraphCode`]:
@@ -49,7 +48,7 @@
 //! let code: TelegraphCode = '一'.try_into()?;
 //! let num: usize = code.into();
 //! assert_eq!(num, 1);
-//! assert_eq!(code.to_string(), "0001");
+//! assert_eq!(code.to_code_str(), "0001");
 //! # Ok::<(), chinese_telegraph::NoTelegraphCode>(())
 //! ```
 //!
@@ -57,23 +56,33 @@
 //! To convert a sentence, iterate over its characters:
 //!
 //! ```rust
-//! # #[cfg(feature = "std")] {
-//! use chinese_telegraph::{to_telegraph_string, Table};
+//! use chinese_telegraph::{Table, TelegraphCode};
 //!
 //! let codes: Vec<_> = "電報"
 //!     .chars()
-//!     .filter_map(|c| to_telegraph_string(&c.to_string(), Table::TW))
+//!     .filter_map(|c| TelegraphCode::lookup(c, Table::TW))
+//!     .map(|code| code.to_code_str())
 //!     .collect();
 //! assert_eq!(codes, ["7193", "1032"]);
-//! # }
 //! ```
 //!
 //! # Feature flags
 //!
-//! - `std` *(enabled by default)* — adds [`to_telegraph_string`] for
-//!   formatting codes as 4-digit [`String`](std::string::String)s. Disable it
-//!   with `default-features = false` for `no_std` environments; [`to_telegraph`]
-//!   works without it.
+//! All features are enabled by default:
+//!
+//! - `telegraph-code` — the [`TelegraphCode`] type with its standard
+//!   conversion traits, and the [`NoTelegraphCode`] error.
+//! - `code-str` — the [`CodeStr`] inline four-digit string type and
+//!   [`to_telegraph_str`].
+//! - `std` — adds [`to_telegraph_string`] for formatting codes as 4-digit
+//!   [`String`](std::string::String)s, and (with `telegraph-code`)
+//!   implements `std::error::Error` for [`NoTelegraphCode`].
+//!
+//! The core lookup, [`to_telegraph`], works without any features: the crate
+//! is `#![no_std]` and allocation-free at its core, with heap-free
+//! four-digit formatting available via `code-str`. For `no_std`
+//! environments, disable `std` (or all default features) with
+//! `default-features = false`.
 
 /// Simplified Chinese character lookup table.
 // Telegraph codes are canonically written as 4-digit numbers, so the tables
@@ -143,16 +152,19 @@ pub fn to_telegraph(character: &str, table: Table) -> Option<usize> {
 /// Produced by the [`TryFrom`] implementations on [`TelegraphCode`] when the
 /// character is not found in the searched table(s), or when a string input
 /// is not exactly one character.
+#[cfg(feature = "telegraph-code")]
+#[cfg_attr(docsrs, doc(cfg(feature = "telegraph-code")))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NoTelegraphCode;
 
+#[cfg(feature = "telegraph-code")]
 impl core::fmt::Display for NoTelegraphCode {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("no Chinese telegraph code for the given character")
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "telegraph-code"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 impl std::error::Error for NoTelegraphCode {}
 
@@ -184,9 +196,12 @@ impl std::error::Error for NoTelegraphCode {}
 /// assert!(TelegraphCode::try_from('🦀').is_err());
 /// # Ok::<(), chinese_telegraph::NoTelegraphCode>(())
 /// ```
+#[cfg(feature = "telegraph-code")]
+#[cfg_attr(docsrs, doc(cfg(feature = "telegraph-code")))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TelegraphCode(usize);
 
+#[cfg(feature = "telegraph-code")]
 impl TelegraphCode {
     /// Looks up `character` in the selected `table`.
     ///
@@ -214,14 +229,112 @@ impl TelegraphCode {
     pub const fn code(self) -> usize {
         self.0
     }
+
+    /// Formats the code in its conventional four-digit form, without heap
+    /// allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use chinese_telegraph::TelegraphCode;
+    ///
+    /// let code = TelegraphCode::try_from('一')?;
+    /// assert_eq!(code.to_code_str(), "0001");
+    /// # Ok::<(), chinese_telegraph::NoTelegraphCode>(())
+    /// ```
+    #[cfg(feature = "code-str")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "code-str")))]
+    pub const fn to_code_str(self) -> CodeStr {
+        CodeStr::new(self.0)
+    }
 }
 
+/// The four-digit form of a telegraph code (e.g. `"0001"`), stored inline
+/// without heap allocation.
+///
+/// Returned by [`to_telegraph_str`] and [`TelegraphCode::to_code_str`]. It
+/// holds the code's four ASCII digits, including leading zeros, and can be
+/// used wherever a [`&str`](str) is expected via [`as_str`](CodeStr::as_str),
+/// [`Deref`](core::ops::Deref), or [`AsRef<str>`](AsRef).
+///
+/// # Examples
+///
+/// ```rust
+/// use chinese_telegraph::{to_telegraph_str, Table};
+///
+/// let code_str = to_telegraph_str("一", Table::Both).unwrap();
+/// assert_eq!(code_str, "0001");
+/// assert_eq!(code_str.as_str().len(), 4);
+/// ```
+#[cfg(feature = "code-str")]
+#[cfg_attr(docsrs, doc(cfg(feature = "code-str")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CodeStr([u8; 4]);
+
+#[cfg(feature = "code-str")]
+impl CodeStr {
+    /// Formats `code` as four ASCII digits. `code` must be at most `9999`,
+    /// which every table entry is.
+    const fn new(code: usize) -> Self {
+        Self([
+            b'0' + (code / 1000 % 10) as u8,
+            b'0' + (code / 100 % 10) as u8,
+            b'0' + (code / 10 % 10) as u8,
+            b'0' + (code % 10) as u8,
+        ])
+    }
+
+    /// Returns the four-digit code as a string slice.
+    pub fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.0).expect("telegraph code digits are ASCII")
+    }
+}
+
+#[cfg(feature = "code-str")]
+impl core::ops::Deref for CodeStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+#[cfg(feature = "code-str")]
+impl AsRef<str> for CodeStr {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+#[cfg(feature = "code-str")]
+impl PartialEq<&str> for CodeStr {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+#[cfg(feature = "code-str")]
+impl PartialEq<str> for CodeStr {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+#[cfg(feature = "code-str")]
+impl core::fmt::Display for CodeStr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "telegraph-code")]
 impl core::fmt::Display for TelegraphCode {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:04}", self.0)
     }
 }
 
+#[cfg(feature = "telegraph-code")]
 impl TryFrom<char> for TelegraphCode {
     type Error = NoTelegraphCode;
 
@@ -230,6 +343,7 @@ impl TryFrom<char> for TelegraphCode {
     }
 }
 
+#[cfg(feature = "telegraph-code")]
 impl TryFrom<&str> for TelegraphCode {
     type Error = NoTelegraphCode;
 
@@ -240,6 +354,7 @@ impl TryFrom<&str> for TelegraphCode {
     }
 }
 
+#[cfg(feature = "telegraph-code")]
 impl From<TelegraphCode> for usize {
     fn from(code: TelegraphCode) -> Self {
         code.0
@@ -250,10 +365,36 @@ impl From<TelegraphCode> for usize {
 extern crate std;
 
 /// Converts a Chinese character to its telegraph code, formatted as the
-/// conventional four-digit string with leading zeros.
+/// conventional four-digit code with leading zeros.
 ///
-/// This is [`to_telegraph`] followed by `format!("{:04}")`, and is only
-/// available when the `std` feature is enabled. It returns `None` in the
+/// This is the formatting counterpart of [`to_telegraph`]. The returned
+/// [`CodeStr`] stores the four ASCII digits inline — no heap allocation —
+/// and dereferences to [`&str`](str). It returns `None` in the same cases
+/// as [`to_telegraph`]: an unknown character, or input that is not exactly
+/// one character.
+///
+/// # Examples
+///
+/// ```rust
+/// use chinese_telegraph::{to_telegraph_str, Table};
+///
+/// assert_eq!(to_telegraph_str("一", Table::Both).unwrap(), "0001");
+/// assert_eq!(to_telegraph_str("這", Table::TW).unwrap(), "6638");
+/// assert!(to_telegraph_str("🦀", Table::Both).is_none());
+/// ```
+#[cfg(feature = "code-str")]
+#[cfg_attr(docsrs, doc(cfg(feature = "code-str")))]
+pub fn to_telegraph_str(character: &str, table: Table) -> Option<CodeStr> {
+    to_telegraph(character, table).map(CodeStr::new)
+}
+
+/// Converts a Chinese character to its telegraph code, formatted as the
+/// conventional four-digit [`String`](std::string::String) with leading
+/// zeros.
+///
+/// This is only available when the `std` feature is enabled; prefer
+/// [`to_telegraph_str`], which returns the same four digits without heap
+/// allocation and works in `no_std` environments. It returns `None` in the
 /// same cases as [`to_telegraph`]: an unknown character, or input that is
 /// not exactly one character.
 ///
@@ -274,7 +415,9 @@ pub fn to_telegraph_string(character: &str, table: Table) -> Option<std::string:
 
 #[cfg(test)]
 mod tests {
-    use crate::{to_telegraph, to_telegraph_string};
+    use crate::to_telegraph;
+    #[cfg(feature = "code-str")]
+    use crate::to_telegraph_str;
 
     #[test]
     fn it_can_look_up_a_tw_character() {
@@ -306,18 +449,21 @@ mod tests {
         assert_eq!(result, None);
     }
 
+    #[cfg(feature = "telegraph-code")]
     #[test]
     fn it_converts_a_char_with_try_into() {
         let code: crate::TelegraphCode = '這'.try_into().unwrap();
         assert_eq!(code.code(), 6638);
     }
 
+    #[cfg(feature = "telegraph-code")]
     #[test]
     fn it_converts_a_str_with_try_into() {
         let code: crate::TelegraphCode = "这".try_into().unwrap();
         assert_eq!(code.code(), 6638);
     }
 
+    #[cfg(feature = "telegraph-code")]
     #[test]
     fn it_converts_a_code_into_usize() {
         let code = crate::TelegraphCode::lookup('一', crate::Table::Both).unwrap();
@@ -325,6 +471,7 @@ mod tests {
         assert_eq!(num, 1);
     }
 
+    #[cfg(feature = "telegraph-code")]
     #[test]
     fn it_fails_to_convert_unknown_characters() {
         assert_eq!(
@@ -337,6 +484,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "telegraph-code")]
     #[test]
     fn it_respects_the_table_in_lookup() {
         assert_eq!(crate::TelegraphCode::lookup('这', crate::Table::TW), None);
@@ -344,16 +492,41 @@ mod tests {
         assert_eq!(code.code(), 6638);
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", feature = "telegraph-code"))]
     #[test]
     fn it_displays_the_code_with_leading_zeros() {
         let code = crate::TelegraphCode::lookup('一', crate::Table::Both).unwrap();
         assert_eq!(std::string::ToString::to_string(&code), "0001");
     }
 
+    #[cfg(feature = "code-str")]
     #[test]
     fn it_formats_the_number_with_leading_zeros() {
-        let result = to_telegraph_string("一", crate::Table::Both);
+        let result = to_telegraph_str("一", crate::Table::Both);
+        assert_eq!(result.unwrap(), "0001");
+    }
+
+    #[cfg(feature = "code-str")]
+    #[test]
+    fn it_returns_none_from_to_telegraph_str_for_unknown_input() {
+        assert!(to_telegraph_str("🦀", crate::Table::Both).is_none());
+        assert!(to_telegraph_str("這是", crate::Table::Both).is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn it_formats_the_number_as_a_string() {
+        let result = crate::to_telegraph_string("一", crate::Table::Both);
         assert_eq!(result, Some(std::string::ToString::to_string("0001")));
+    }
+
+    #[cfg(all(feature = "telegraph-code", feature = "code-str"))]
+    #[test]
+    fn it_formats_a_code_without_allocating() {
+        let code = crate::TelegraphCode::lookup('這', crate::Table::TW).unwrap();
+        let code_str = code.to_code_str();
+        assert_eq!(code_str, "6638");
+        assert_eq!(code_str.as_str(), "6638");
+        assert_eq!(&*code_str, "6638");
     }
 }
