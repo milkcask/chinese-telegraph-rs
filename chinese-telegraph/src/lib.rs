@@ -40,11 +40,15 @@
 //! assert_eq!(to_telegraph_str("一", Table::Both).unwrap(), "0001");
 //! ```
 //!
-//! The standard conversion traits are also supported via [`TelegraphCode`]:
+//! The standard conversion traits are also supported via [`TelegraphCode`].
+//! Converting with `try_into` searches both tables ([`Table::Both`]:
+//! Traditional first, then Simplified); use [`TelegraphCode::lookup`] to
+//! search a specific table:
 //!
 //! ```rust
 //! use chinese_telegraph::TelegraphCode;
 //!
+//! // Searches the Traditional table first, then the Simplified table
 //! let code: TelegraphCode = '一'.try_into()?;
 //! let num: usize = code.into();
 //! assert_eq!(num, 1);
@@ -334,6 +338,9 @@ impl core::fmt::Display for TelegraphCode {
     }
 }
 
+/// Converts a [`char`] by searching both tables ([`Table::Both`]:
+/// Traditional first, then Simplified). Use [`TelegraphCode::lookup`] to
+/// search a specific table.
 #[cfg(feature = "telegraph-code")]
 impl TryFrom<char> for TelegraphCode {
     type Error = NoTelegraphCode;
@@ -343,6 +350,9 @@ impl TryFrom<char> for TelegraphCode {
     }
 }
 
+/// Converts a single-character string slice by searching both tables
+/// ([`Table::Both`]: Traditional first, then Simplified). Use
+/// [`TelegraphCode::lookup`] to search a specific table.
 #[cfg(feature = "telegraph-code")]
 impl TryFrom<&str> for TelegraphCode {
     type Error = NoTelegraphCode;
