@@ -1,5 +1,6 @@
 use phf::phf_map;
 
+/// Maps Simplified Chinese characters to their telegraph codes.
 pub static CN_TABLE: phf::Map<&'static str, usize> = phf_map! {
     "一" => 0001,
     "丁" => 0002,

@@ -1,74 +1,100 @@
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    html_logo_url = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='28' y='88' font-size='68'>📻</text><text x='4' y='62' font-size='68'>🀄</text></svg>"
+)]
+#![doc(
+    html_favicon_url = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='28' y='88' font-size='68'>📻</text><text x='4' y='62' font-size='68'>🀄</text></svg>"
+)]
 #![deny(missing_docs)]
 #![warn(clippy::missing_docs_in_private_items)]
 
-//! # Chinese Telegraph Code
+//! Convert Unicode Chinese characters to [Chinese telegraph codes] (中文電碼).
 //!
-//! This crate provides utilities for converting Unicode Chinese characters to Chinese telegraph codes.
+//! Chinese telegraph codes — also known as Chinese commercial codes or
+//! standard telegraph codes — are four-digit numerical codes historically
+//! used to transmit Chinese text over telegraph, and still used today in
+//! some identity documents and immigration forms.
 //!
-//! Chinese telegraph codes are numerical codes used historically for transmitting Chinese text over telegraph systems.
-//! This crate supports both Traditional Chinese (Taiwan) and Simplified Chinese character sets.
+//! Both the Traditional Chinese (Taiwan) and Simplified Chinese code tables
+//! are included. Lookups use compile-time perfect hash maps, so there is no
+//! runtime table construction and no heap allocation.
 //!
-//! ## Features
+//! [Chinese telegraph codes]: https://en.wikipedia.org/wiki/Chinese_telegraph_code
 //!
-//! - Convert Chinese characters to telegraph codes
-//! - Support for both Traditional and Simplified Chinese
-//! - `no_std` compatible (with optional `std` feature for string formatting)
-//! - Fast lookups using perfect hash functions
-//!
-//! ## Usage
+//! # Usage
 //!
 //! ```rust
 //! use chinese_telegraph::{to_telegraph, to_telegraph_string, Table};
 //!
 //! // Look up a Traditional Chinese character
-//! let code = to_telegraph("這", Table::TW);
-//! assert_eq!(code, Some(6638));
+//! assert_eq!(to_telegraph("這", Table::TW), Some(6638));
 //!
 //! // Look up a Simplified Chinese character
-//! let code = to_telegraph("这", Table::CN);
-//! assert_eq!(code, Some(6638));
+//! assert_eq!(to_telegraph("这", Table::CN), Some(6638));
 //!
-//! // Search both tables
-//! let code = to_telegraph("一", Table::Both);
-//! assert_eq!(code, Some(1));
+//! // Search both tables (Traditional first, then Simplified)
+//! assert_eq!(to_telegraph("一", Table::Both), Some(1));
 //!
-//! // Format as a 4-digit string (requires std feature)
+//! // Format as the conventional 4-digit code (requires the `std` feature)
 //! # #[cfg(feature = "std")]
-//! let formatted = to_telegraph_string("一", Table::Both);
-//! # #[cfg(feature = "std")]
-//! assert_eq!(formatted, Some("0001".to_string()));
+//! assert_eq!(to_telegraph_string("一", Table::Both), Some("0001".to_string()));
 //! ```
+//!
+//! The input must be exactly one character; longer strings return `None`.
+//! To convert a sentence, iterate over its characters:
+//!
+//! ```rust
+//! # #[cfg(feature = "std")] {
+//! use chinese_telegraph::{to_telegraph_string, Table};
+//!
+//! let codes: Vec<_> = "電報"
+//!     .chars()
+//!     .filter_map(|c| to_telegraph_string(&c.to_string(), Table::TW))
+//!     .collect();
+//! assert_eq!(codes, ["7193", "1032"]);
+//! # }
+//! ```
+//!
+//! # Feature flags
+//!
+//! - `std` *(enabled by default)* — adds [`to_telegraph_string`] for
+//!   formatting codes as 4-digit [`String`](std::string::String)s. Disable it
+//!   with `default-features = false` for `no_std` environments; [`to_telegraph`]
+//!   works without it.
 
 /// Simplified Chinese character lookup table.
+// Telegraph codes are canonically written as 4-digit numbers, so the tables
+// keep leading zeros for readability (Rust parses these as decimal).
+#[allow(clippy::zero_prefixed_literal)]
 mod cn;
 /// Traditional Chinese character lookup table.
+#[allow(clippy::zero_prefixed_literal)]
 mod tw;
 
-/// Specifies which character table(s) to use for telegraph code lookup.
+/// Selects which code table(s) a lookup searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Table {
-    /// Search both Traditional Chinese (TW) and Simplified Chinese (CN) tables.
-    /// TW table is searched first, then CN table if no match is found.
+    /// Search the Traditional Chinese ([`TW`](Table::TW)) table first, then
+    /// fall back to the Simplified Chinese ([`CN`](Table::CN)) table.
     Both,
-    /// Search only the Traditional Chinese (Taiwan) character table.
+    /// Search only the Traditional Chinese (Taiwan) table.
     TW,
-    /// Search only the Simplified Chinese character table.
+    /// Search only the Simplified Chinese table.
     CN,
 }
 
 /// Converts a Chinese character to its telegraph code.
 ///
-/// # Arguments
+/// `character` must be a string slice containing exactly one Chinese
+/// character; `table` selects which code table(s) to search.
 ///
-/// * `character` - A string slice containing exactly one Chinese character
-/// * `table` - Which character table(s) to search
+/// Returns `Some(code)` if the character is found. Telegraph codes are
+/// conventionally written as four digits with leading zeros (e.g. `1` is
+/// `0001`); use [`to_telegraph_string`] to get that form directly.
 ///
-/// # Returns
-///
-/// Returns `Some(code)` if the character is found in the specified table(s),
-/// or `None` if the character is not found or if the input contains more than one character.
+/// Returns `None` if the character is not in the selected table(s), or if
+/// the input is empty or contains more than one character.
 ///
 /// # Examples
 ///
@@ -103,20 +129,13 @@ pub fn to_telegraph(character: &str, table: Table) -> Option<usize> {
 #[cfg(feature = "std")]
 extern crate std;
 
-/// Converts a Chinese character to its telegraph code formatted as a 4-digit string.
+/// Converts a Chinese character to its telegraph code, formatted as the
+/// conventional four-digit string with leading zeros.
 ///
-/// This function is only available when the `std` feature is enabled.
-///
-/// # Arguments
-///
-/// * `character` - A string slice containing exactly one Chinese character
-/// * `table` - Which character table(s) to search
-///
-/// # Returns
-///
-/// Returns `Some(formatted_code)` if the character is found, where the code is
-/// formatted as a 4-digit string with leading zeros, or `None` if the character
-/// is not found or if the input contains more than one character.
+/// This is [`to_telegraph`] followed by `format!("{:04}")`, and is only
+/// available when the `std` feature is enabled. It returns `None` in the
+/// same cases as [`to_telegraph`]: an unknown character, or input that is
+/// not exactly one character.
 ///
 /// # Examples
 ///
